@@ -1,1 +1,1 @@
-B11: Matched HTML and JS, optional fallback file selector no longer crashes initialization, persistent video diagnostics, cache bump. Upload all 11 root files together. This build has not been device-tested.
+FT FlexTranscription B12: Expanded phone-video file selection and experimental on-device FFmpeg.wasm fallback for unsupported codecs. Import does not guarantee browser playback. Conversion requires internet for initial FFmpeg download, substantial RAM, and may fail for large files. The original video is not modified. All files go in GitHub repository root.
