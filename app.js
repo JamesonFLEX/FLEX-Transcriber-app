@@ -17,7 +17,7 @@ async function onVideoChosen(e){
  if(selected.type&&!selected.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|3gp|mkv|avi)$/i.test(selected.name)){loadingUI('This is not a recognized video file.');$('videoLoading').classList.remove('is-loading');status('Choose a video file.',0);return}
  let settled=false;let newUrl;
  const cleanup=()=>{v.removeEventListener('loadedmetadata',ready);v.removeEventListener('canplay',ready);v.removeEventListener('error',bad);v.removeEventListener('progress',progress);v.removeEventListener('waiting',waiting);clearTimeout(loadTimer)};
- const ready=()=>{if(token!==loadToken||settled||!playerReady())return;settled=true;cleanup();duration=v.duration;$('endTime').value=fmt(duration);loadingUI('',false);status('Video ready ('+fmt(duration)+'). Press START TRANSCRIBING, then PLAY VIDEO.',100);note('Ready. Duration: '+fmt(duration)+'. Video: '+v.videoWidth+'×'+v.videoHeight+'.');playbackButtons();if(oldUrl&&oldUrl!==newUrl)URL.revokeObjectURL(oldUrl)};
+ const ready=()=>{if(token!==loadToken||settled||!playerReady())return;settled=true;cleanup();duration=v.duration;$('endTime').value=fmt(duration);loadingUI('',false);status('Video ready ('+fmt(duration)+'). If playback stutters, tap OPTIMIZE VIDEO FOR SPEECH before transcribing.',100);if(!selected.name.includes('-speech-optimized'))showConversion('Optional: make a much lighter 240p / 12 fps copy while preserving speech audio at AAC 128 kbps. Recommended if playback pauses or stutters.');note('Ready. Duration: '+fmt(duration)+'. Video: '+v.videoWidth+'×'+v.videoHeight+'.');playbackButtons();if(oldUrl&&oldUrl!==newUrl)URL.revokeObjectURL(oldUrl)};
  const bad=()=>{if(token!==loadToken||settled)return;settled=true;cleanup();const code=v.error?.code||0;const reasons={1:'loading aborted',2:'network or Drive stream error',3:'video decoding error',4:'format or codec not supported'};note('MEDIA ERROR '+code+': '+(reasons[code]||'unknown')+'. '+(v.error?.message||''));loadingUI('Could not open this video. Try a downloaded MP4 (H.264 video, AAC audio).');$('videoLoading').classList.remove('is-loading');status('Video load failed: '+(reasons[code]||'unknown error')+'. See diagnostics below.',0);$('playVideo').disabled=true;$('transcribe').disabled=true;if(oldUrl&&oldUrl!==newUrl)URL.revokeObjectURL(oldUrl)};
  const progress=()=>{if(token!==loadToken||settled)return;if(playerReady())ready();else status('Video data received. Reading metadata…',35)};
  const waiting=()=>{if(token!==loadToken||settled)return;loadingUI('Waiting for video data from Android / Drive…');note('Waiting for more video data.')};
@@ -34,7 +34,7 @@ async function onVideoChosen(e){
 async function convertSelectedVideo(){
  if(!file||conversionRunning)return;
  const original=file;
- if(original.size>300*1024*1024){showConversion('This file is over 300 MB. Mobile conversion is likely to run out of memory. Convert it using a desktop or a video converter app.');return;}
+ if(original.size>300*1024*1024){showConversion('This file is over 300 MB. Mobile conversion is likely to run out of memory. Use a phone video converter to make a 240p H.264/AAC copy.');return;}
  conversionRunning=true;conversionAbort=false;$('convertVideo').disabled=true;$('cancelConvert').hidden=false;
  const report=m=>{conversionProgress.textContent=m;$('videoDiagnostics').textContent+='\n'+m;};
  try{
@@ -51,8 +51,8 @@ async function convertSelectedVideo(){
   const inputName='source'+(original.name.match(/\.[a-z0-9]+$/i)?.[0]||'.mp4');
   await ffmpegInstance.writeFile(inputName,new Uint8Array(await original.arrayBuffer()));
   if(conversionAbort)throw Error('Conversion canceled');
-  report('Converting to H.264/AAC at up to 720p. Please keep this tab open…');
-  const exit=await ffmpegInstance.exec(['-i',inputName,'-vf','scale=1280:720:force_original_aspect_ratio=decrease:force_divisible_by=2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-b:a','96k','-movflags','+faststart','-y','compatible.mp4']);
+  report('Optimizing for speech: 240p video at 12 fps, AAC audio at 128 kbps. Do not close this tab…');
+  const exit=await ffmpegInstance.exec(['-i',inputName,'-vf','fps=12,scale=426:240:force_original_aspect_ratio=decrease:force_divisible_by=2','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-c:a','aac','-b:a','128k','-movflags','+faststart','-y','compatible.mp4']);
   if(exit!==0)throw Error('Converter exited with code '+exit);
   const data=await ffmpegInstance.readFile('compatible.mp4');
   if(!data?.length)throw Error('Converter produced an empty file');
@@ -66,7 +66,7 @@ async function convertSelectedVideo(){
 }
 $('convertVideo').addEventListener('click',convertSelectedVideo);
 $('cancelConvert').addEventListener('click',async()=>{conversionAbort=true;conversionProgress.textContent='Canceling…';try{ffmpegInstance?.terminate();ffmpegInstance=null;}catch{}});
-$('videoDiagnostics').hidden=false; $('videoDiagnostics').textContent='B10 ready. Select a file. If nothing changes, try the visible direct file selector.'; $('videoFile').addEventListener('change',onVideoChosen);$('directVideoFile')?.addEventListener('change',onVideoChosen);$('driveFile').addEventListener('change',onVideoChosen);$('chooseGallery').onclick=()=>{$('videoDiagnostics').textContent='Opening Gallery / Files picker…';$('videoFile').value='';$('videoFile').click()};$('chooseDrive').onclick=()=>{$('driveHelp').hidden=false;$('videoDiagnostics').textContent='Opening Android document picker…';$('driveFile').value='';$('driveFile').click()};$('player').addEventListener('loadedmetadata',()=>{duration=Number.isFinite($('player').duration)?$('player').duration:0;$('endTime').value=fmt(duration)});function setMode(m){mode=m;$('rangeArea').hidden=m==='full';$('fullMode').classList.toggle('selected',m==='full');$('sectionMode').classList.toggle('selected',m==='section')}$('fullMode').onclick=()=>setMode('full');$('sectionMode').onclick=()=>setMode('section');$('setStart').onclick=()=>{$('startTime').value=fmt($('player').currentTime)};$('setEnd').onclick=()=>{$('endTime').value=fmt($('player').currentTime)};// B6: capture the actual video element's audio during user-controlled playback.
+$('videoDiagnostics').hidden=false; $('videoDiagnostics').textContent='B13 ready. Select a file. If nothing changes, try the visible direct file selector.'; $('videoFile').addEventListener('change',onVideoChosen);$('directVideoFile')?.addEventListener('change',onVideoChosen);$('driveFile').addEventListener('change',onVideoChosen);$('chooseGallery').onclick=()=>{$('videoDiagnostics').textContent='Opening Gallery / Files picker…';$('videoFile').value='';$('videoFile').click()};$('chooseDrive').onclick=()=>{$('driveHelp').hidden=false;$('videoDiagnostics').textContent='Opening Android document picker…';$('driveFile').value='';$('driveFile').click()};$('player').addEventListener('loadedmetadata',()=>{duration=Number.isFinite($('player').duration)?$('player').duration:0;$('endTime').value=fmt(duration)});function setMode(m){mode=m;$('rangeArea').hidden=m==='full';$('fullMode').classList.toggle('selected',m==='full');$('sectionMode').classList.toggle('selected',m==='section')}$('fullMode').onclick=()=>setMode('full');$('sectionMode').onclick=()=>setMode('section');$('setStart').onclick=()=>{$('startTime').value=fmt($('player').currentTime)};$('setEnd').onclick=()=>{$('endTime').value=fmt($('player').currentTime)};// B6: capture the actual video element's audio during user-controlled playback.
 // No microphone permission and no decodeAudioData(MP4) required.
 let audioCtx=null,mediaSource=null,processor=null,silentGain=null;
 let armed=false,finishing=false,captured=[],frameCount=0,firstSampleRate=0;
@@ -104,7 +104,7 @@ async function setupCapture(){
   }
   captured.push({pcm:data,startTime:chunkStart,endTime:at,energy});
   lastVideoTime=at;frameCount+=data.length;
-  if(captured.length%24===0)status('Capturing video audio · '+Math.round(frameCount/firstSampleRate)+' seconds collected. Press STOP TRANSCRIBING whenever ready.',Math.min(85,5+Math.round(frameCount/firstSampleRate/2)));
+  if(captured.length%110===0)status('Capturing video audio · '+Math.round(frameCount/firstSampleRate)+' seconds collected. Press STOP TRANSCRIBING whenever ready.',Math.min(85,5+Math.round(frameCount/firstSampleRate/2)));
  };
 }
 function resample(data,from,to=16000){

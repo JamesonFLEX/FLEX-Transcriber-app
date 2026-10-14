@@ -1,1 +1,3 @@
-FT FlexTranscription B12: Expanded phone-video file selection and experimental on-device FFmpeg.wasm fallback for unsupported codecs. Import does not guarantee browser playback. Conversion requires internet for initial FFmpeg download, substantial RAM, and may fail for large files. The original video is not modified. All files go in GitHub repository root.
+FT FlexTranscription B13
+
+Optional OPTIMIZE VIDEO FOR SPEECH creates a lightweight 240p 12fps H.264 video with AAC 128kbps audio before playback. Original file remains unchanged. Conversion uses FFmpeg.wasm, may be slow, require an internet connection, or fail on some Android devices. Video playback and transcription still require device testing. All files at ZIP root.
