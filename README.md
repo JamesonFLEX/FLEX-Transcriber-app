@@ -1,1 +1,1 @@
-FT FlexTranscription Build B9. Fixes startup JavaScript crash caused by seven missing DOM elements in B8, which prevented file-picker change listeners from being attached. Diagnostics now always visible. Replace all 11 root files in GitHub Pages. Video and transcription require device testing; speaker separation is not validated.
+B11: Matched HTML and JS, optional fallback file selector no longer crashes initialization, persistent video diagnostics, cache bump. Upload all 11 root files together. This build has not been device-tested.
