@@ -1,3 +1,7 @@
-FT FlexTranscription B13
+FT FlexTranscription B14 - Audio-first extraction and transcription
 
-Optional OPTIMIZE VIDEO FOR SPEECH creates a lightweight 240p 12fps H.264 video with AAC 128kbps audio before playback. Original file remains unchanged. Conversion uses FFmpeg.wasm, may be slow, require an internet connection, or fail on some Android devices. Video playback and transcription still require device testing. All files at ZIP root.
+Select a video or audio file, then tap EXTRACT AUDIO + TRANSCRIBE. No video playback required.
+FFmpeg WebAssembly demuxes and decodes the audio track into 16 kHz mono WAV. Whisper Tiny English transcribes locally.
+First use requires internet access to download FFmpeg and Whisper. Large files may exceed Android memory.
+No automatic speaker identification. Review transcription and manually assign speakers.
+All files belong at the GitHub repository root.
