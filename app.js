@@ -1,50 +1,107 @@
-(()=>{'use strict';const $=id=>document.getElementById(id);let file=null,objectUrl=null,mode='full',segments=[],speakers={},task=null,stopped=false,busy=false,hash='',duration=0,created=null;const dbKey='flex-transcripts-b1';const fmt=s=>{s=Math.max(0,Math.floor(s||0));return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':')};const parseTime=v=>{const p=v.trim().split(':').map(Number);if(p.some(n=>!Number.isFinite(n)||n<0)||p.length>3||!p.length)return NaN;return p.reduce((a,n)=>a*60+n,0)};const status=(s,p)=>{$('status').textContent=s;if(p!==undefined)$('progressBar').style.width=p+'%'};const setBusy=v=>{busy=v;$('transcribe').disabled=v||!file;$('stop').disabled=!v;$('videoFile').disabled=v};const size=n=>n>1048576?(n/1048576).toFixed(1)+' MB':(n/1024).toFixed(0)+' KB';function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function readRecords(){try{return JSON.parse(localStorage.getItem(dbKey)||'[]')}catch{return []}}function storeRecords(a){localStorage.setItem(dbKey,JSON.stringify(a))}function getRecord(){return {id:created?.id||crypto.randomUUID(),title:$('recordTitle').value.trim()||file?.name||'Video transcript',filename:file?.name||created?.filename||'Unknown',duration:fmt(duration),range:mode==='full'?'Entire video':$('startTime').value+' to '+$('endTime').value,created:created?.created||new Date().toISOString(),sourceDate:$('sourceDate').value,hash,segments:segments.map(x=>({...x})),speakers:{...speakers}}}function render(){const keys=[...new Set(segments.map(x=>x.speaker))];$('segmentCount').textContent=segments.length+' segments';$('speakerPanel').innerHTML=keys.map(k=>'<div class="speaker"><label>'+escapeHTML(k)+'<input data-speaker="'+escapeHTML(k)+'" value="'+escapeHTML(speakers[k]||k)+'" aria-label="Rename '+escapeHTML(k)+'"></label></div>').join('');$('transcriptList').innerHTML=segments.length?segments.map((s,i)=>'<div class="segment"><div class="seghead"><strong>['+fmt(s.start/1000)+'] '+escapeHTML(speakers[s.speaker]||s.speaker)+'</strong><button class="quiet" data-seek="'+s.start+'">▶ Play</button></div><div class="segment-tools"><label>Voice <select data-assign="'+i+'">'+[...new Set([...Object.keys(speakers),'Unassigned','Voice 1','Voice 2','Voice 3','Voice 4','Voice 5'])].map(k=>'<option value="'+escapeHTML(k)+'" '+(s.speaker===k?'selected':'')+'>'+escapeHTML(speakers[k]||k)+'</option>').join('')+'</select></label><button class="quiet" data-split="'+i+'">Split</button><button class="quiet" data-merge="'+i+'">Merge next</button></div><textarea data-seg="'+i+'" aria-label="Edit transcript segment '+(i+1)+'">'+escapeHTML(s.text)+'</textarea></div>').join(''):'<div class="empty">Your speaker-separated transcript will appear here.</div>';$('save').disabled=$('export').disabled=!segments.length}function renderHistory(){const a=readRecords();$('history').innerHTML=a.length?a.map(r=>'<div class="historyitem"><div><strong>'+escapeHTML(r.title)+'</strong><small>'+escapeHTML(new Date(r.created).toLocaleString())+' · '+r.segments.length+' segments</small></div><div class="historybuttons"><button class="quiet" data-load="'+escapeHTML(r.id)+'">Open</button><button class="quiet" data-delete="'+escapeHTML(r.id)+'">Delete</button></div></div>').join(''):'<div class="empty">No records saved yet.</div>'}async function digest(f){if(!crypto.subtle||f.size>150*1024*1024)return '';try{const bytes=await f.arrayBuffer();const b=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('')}catch{return ''}}async function onVideoChosen(e){if(!e.target.files?.[0])return;const selected=e.target.files[0];if(selected.type&&!selected.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|3gp|mkv|avi)$/i.test(selected.name)){status('Select a video file, not '+selected.name);return}file=selected;created=null;segments=[];speakers={};hash='';duration=0;render();if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(file);$('player').src=objectUrl;$('player').hidden=false;$('fileInfo').hidden=false;$('fileInfo').textContent=file.name+' · '+size(file.size);$('recordTitle').value=file.name.replace(/\.[^.]+$/,'');$('transcribe').disabled=false;status('Video selected. Ready to transcribe.',0);hash=await digest(file)}$('videoFile').addEventListener('change',onVideoChosen);$('driveFile').addEventListener('change',onVideoChosen);$('chooseGallery').onclick=()=>$('videoFile').click();$('chooseDrive').onclick=()=>{$('driveHelp').hidden=false;$('driveFile').value='';$('driveFile').click()};$('player').addEventListener('loadedmetadata',()=>{duration=Number.isFinite($('player').duration)?$('player').duration:0;$('endTime').value=fmt(duration)});function setMode(m){mode=m;$('rangeArea').hidden=m==='full';$('fullMode').classList.toggle('selected',m==='full');$('sectionMode').classList.toggle('selected',m==='section')}$('fullMode').onclick=()=>setMode('full');$('sectionMode').onclick=()=>setMode('section');$('setStart').onclick=()=>{$('startTime').value=fmt($('player').currentTime)};$('setEnd').onclick=()=>{$('endTime').value=fmt($('player').currentTime)};$('stop').onclick=()=>{stopped=true;status('Stop requested. Finishing the current audio chunk…')};
-
-// Experimental on-device voice-turn detector. Spectral fingerprints are heuristic,
-// not speaker verification. The user must review every suggested boundary/label.
-function voiceFeatures(samples,rate=16000){
- const hop=8000, win=4096, rows=[];
- for(let pos=0;pos+win<samples.length;pos+=hop){
-  let energy=0,z=0,prev=0,bands=new Float64Array(12);
-  for(let i=0;i<win;i+=4){const v=samples[pos+i];energy+=v*v;if(i&&v*prev<0)z++;prev=v}
-  energy=Math.sqrt(energy/(win/4));
-  for(let k=1;k<=72;k++){let re=0,im=0;for(let i=0;i<win;i+=16){const a=2*Math.PI*k*i/win;re+=samples[pos+i]*Math.cos(a);im-=samples[pos+i]*Math.sin(a)}bands[Math.min(11,Math.floor((k-1)/6))]+=re*re+im*im}
-  const total=bands.reduce((a,b)=>a+b,0)||1;const feat=Array.from(bands,x=>Math.log(1+1000*x/total));feat.push(z/(win/4));
-  rows.push({t:pos/rate,energy,feat});
- }return rows;
+(()=>{'use strict';const $=id=>document.getElementById(id);let file=null,objectUrl=null,mode='full',segments=[],speakers={},task=null,stopped=false,busy=false,hash='',duration=0,created=null;const dbKey='flex-transcripts-b1';const fmt=s=>{s=Math.max(0,Math.floor(s||0));return [Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':')};const parseTime=v=>{const p=v.trim().split(':').map(Number);if(p.some(n=>!Number.isFinite(n)||n<0)||p.length>3||!p.length)return NaN;return p.reduce((a,n)=>a*60+n,0)};const status=(s,p)=>{$('status').textContent=s;if(p!==undefined)$('progressBar').style.width=p+'%'};const setBusy=v=>{busy=v;$('transcribe').disabled=v||!file;$('stop').disabled=!v;$('videoFile').disabled=v};const size=n=>n>1048576?(n/1048576).toFixed(1)+' MB':(n/1024).toFixed(0)+' KB';function escapeHTML(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function readRecords(){try{return JSON.parse(localStorage.getItem(dbKey)||'[]')}catch{return []}}function storeRecords(a){localStorage.setItem(dbKey,JSON.stringify(a))}function getRecord(){return {id:created?.id||crypto.randomUUID(),title:$('recordTitle').value.trim()||file?.name||'Video transcript',filename:file?.name||created?.filename||'Unknown',duration:fmt(duration),range:mode==='full'?'Entire video':$('startTime').value+' to '+$('endTime').value,created:created?.created||new Date().toISOString(),sourceDate:$('sourceDate').value,hash,segments:segments.map(x=>({...x})),speakers:{...speakers}}}function render(){const keys=[...new Set(segments.map(x=>x.speaker))];$('segmentCount').textContent=segments.length+' segments';$('speakerPanel').innerHTML=keys.map(k=>'<div class="speaker"><label>'+escapeHTML(k)+'<input data-speaker="'+escapeHTML(k)+'" value="'+escapeHTML(speakers[k]||k)+'" aria-label="Rename '+escapeHTML(k)+'"></label></div>').join('');$('transcriptList').innerHTML=segments.length?segments.map((s,i)=>'<div class="segment"><div class="seghead"><strong>['+fmt(s.start/1000)+'] '+escapeHTML(speakers[s.speaker]||s.speaker)+'</strong><button class="quiet" data-seek="'+s.start+'">▶ Play</button></div><div class="segment-tools"><label>Voice <select data-assign="'+i+'">'+[...new Set([...Object.keys(speakers),'Unassigned','Voice 1','Voice 2','Voice 3','Voice 4','Voice 5'])].map(k=>'<option value="'+escapeHTML(k)+'" '+(s.speaker===k?'selected':'')+'>'+escapeHTML(speakers[k]||k)+'</option>').join('')+'</select></label><button class="quiet" data-split="'+i+'">Split</button><button class="quiet" data-merge="'+i+'">Merge next</button></div><textarea data-seg="'+i+'" aria-label="Edit transcript segment '+(i+1)+'">'+escapeHTML(s.text)+'</textarea></div>').join(''):'<div class="empty">Your speaker-separated transcript will appear here.</div>';$('save').disabled=$('export').disabled=!segments.length}function renderHistory(){const a=readRecords();$('history').innerHTML=a.length?a.map(r=>'<div class="historyitem"><div><strong>'+escapeHTML(r.title)+'</strong><small>'+escapeHTML(new Date(r.created).toLocaleString())+' · '+r.segments.length+' segments</small></div><div class="historybuttons"><button class="quiet" data-load="'+escapeHTML(r.id)+'">Open</button><button class="quiet" data-delete="'+escapeHTML(r.id)+'">Delete</button></div></div>').join(''):'<div class="empty">No records saved yet.</div>'}async function digest(f){if(!crypto.subtle||f.size>150*1024*1024)return '';try{const bytes=await f.arrayBuffer();const b=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('')}catch{return ''}}async function onVideoChosen(e){if(!e.target.files?.[0])return;const selected=e.target.files[0];if(selected.type&&!selected.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|3gp|mkv|avi)$/i.test(selected.name)){status('Select a video file, not '+selected.name);return}file=selected;created=null;segments=[];speakers={};hash='';duration=0;render();if(armed||finishing){status('Stop transcription before changing the video.');return}if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(file);$('player').src=objectUrl;$('player').hidden=false;$('fileInfo').hidden=false;$('fileInfo').textContent=file.name+' · '+size(file.size);$('recordTitle').value=file.name.replace(/\.[^.]+$/,'');playbackButtons();status('Video selected. Press START TRANSCRIBING, then PLAY VIDEO.',0);hash=await digest(file)}$('videoFile').addEventListener('change',onVideoChosen);$('driveFile').addEventListener('change',onVideoChosen);$('chooseGallery').onclick=()=>$('videoFile').click();$('chooseDrive').onclick=()=>{$('driveHelp').hidden=false;$('driveFile').value='';$('driveFile').click()};$('player').addEventListener('loadedmetadata',()=>{duration=Number.isFinite($('player').duration)?$('player').duration:0;$('endTime').value=fmt(duration)});function setMode(m){mode=m;$('rangeArea').hidden=m==='full';$('fullMode').classList.toggle('selected',m==='full');$('sectionMode').classList.toggle('selected',m==='section')}$('fullMode').onclick=()=>setMode('full');$('sectionMode').onclick=()=>setMode('section');$('setStart').onclick=()=>{$('startTime').value=fmt($('player').currentTime)};$('setEnd').onclick=()=>{$('endTime').value=fmt($('player').currentTime)};// B6: capture the actual video element's audio during user-controlled playback.
+// No microphone permission and no decodeAudioData(MP4) required.
+let audioCtx=null,mediaSource=null,processor=null,silentGain=null;
+let armed=false,finishing=false,captured=[],frameCount=0,firstSampleRate=0;
+let pendingAudio=null,chunkStart=null,lastVideoTime=null;
+function playbackButtons(){
+ $('playVideo').disabled=!file;
+ $('pauseVideo').disabled=!file||$('player').paused;
+ $('stopVideo').disabled=!file;
+ $('transcribe').disabled=!file||armed||finishing;
+ $('stop').disabled=!armed;
+ $('videoFile').disabled=armed||finishing;
+ $('driveFile').disabled=armed||finishing;
 }
-function distance(a,b){let d=0;for(let i=0;i<a.length;i++)d+=(a[i]-b[i])**2;return Math.sqrt(d/a.length)}
-function proposeTurns(audio,rate,start,end){
- const slice=audio.subarray(Math.floor(start*rate),Math.floor(end*rate));const rows=voiceFeatures(slice,rate);if(!rows.length)return [{start,end,voice:'Unassigned',confidence:'low'}];
- const loud=rows.map(r=>r.energy).sort((a,b)=>a-b);const threshold=Math.max(.002,(loud[Math.floor(loud.length*.7)]||0)*.13);
- const groups=[];let active=null;
- for(const r of rows){if(r.energy>=threshold){if(!active)active={start:r.t,end:r.t+.5,features:[]};active.end=r.t+.5;active.features.push(r.feat)}else if(active){if(active.end-active.start>=.7)groups.push(active);active=null}}
- if(active&&active.end-active.start>=.7)groups.push(active);
- if(!groups.length)return [{start,end,voice:'Unassigned',confidence:'low'}];
- const avg=g=>g.features[0].map((_,i)=>g.features.reduce((sum,f)=>sum+f[i],0)/g.features.length);
- const turns=[];let current=null;let prototypes=[];
- for(const g of groups){const f=avg(g);let best=-1,bestD=Infinity;prototypes.forEach((p,i)=>{const d=distance(f,p);if(d<bestD){bestD=d;best=i}});
-  // Conservative matching: do not force uncertain voices into a known identity.
-  let label='Unassigned';if(best>=0&&bestD<.22)label='Voice '+(best+1);else if(prototypes.length<8){prototypes.push(f);label='Voice '+prototypes.length}
-  const a=start+g.start,b=Math.min(end,start+g.end);
-  if(current&&current.voice===label&&a-current.end<1.3&&b-current.start<12){current.end=b}else{current={start:a,end:b,voice:label,confidence:'low'};turns.push(current)}
+async function setupCapture(){
+ if(audioCtx)return;
+ const Ctx=window.AudioContext||window.webkitAudioContext;
+ if(!Ctx)throw Error('Web Audio is not supported in this browser');
+ audioCtx=new Ctx();firstSampleRate=audioCtx.sampleRate;
+ mediaSource=audioCtx.createMediaElementSource($('player'));
+ processor=audioCtx.createScriptProcessor(4096,2,1);
+ silentGain=audioCtx.createGain();silentGain.gain.value=0;
+ mediaSource.connect(audioCtx.destination);
+ mediaSource.connect(processor);processor.connect(silentGain);silentGain.connect(audioCtx.destination);
+ processor.onaudioprocess=e=>{
+  if(!armed||$('player').paused||$('player').ended)return;
+  const input=e.inputBuffer;const left=input.getChannelData(0),right=input.numberOfChannels>1?input.getChannelData(1):left;
+  const data=new Float32Array(left.length);let energy=0;
+  for(let i=0;i<data.length;i++){data[i]=(left[i]+right[i])*.5;energy+=data[i]*data[i]}
+  const at=$('player').currentTime;
+  if(chunkStart===null)chunkStart=Math.max(0,at-data.length/firstSampleRate);
+  // Keep timing anchors for seeking during capture.
+  if(lastVideoTime!==null&&(at<lastVideoTime-.5||at-lastVideoTime>2)){
+   if(captured.length)captured[captured.length-1].endTime=lastVideoTime;
+   chunkStart=Math.max(0,at-data.length/firstSampleRate);
+  }
+  captured.push({pcm:data,startTime:chunkStart,endTime:at,energy});
+  lastVideoTime=at;frameCount+=data.length;
+  if(captured.length%24===0)status('Capturing video audio · '+Math.round(frameCount/firstSampleRate)+' seconds collected. Press STOP TRANSCRIBING whenever ready.',Math.min(85,5+Math.round(frameCount/firstSampleRate/2)));
+ };
+}
+function resample(data,from,to=16000){
+ if(from===to)return data;
+ const count=Math.max(1,Math.floor(data.length*to/from));const out=new Float32Array(count);
+ for(let i=0;i<count;i++){const p=i*from/to,lo=Math.floor(p),hi=Math.min(data.length-1,lo+1),mix=p-lo;out[i]=data[lo]*(1-mix)+data[hi]*mix}
+ return out;
+}
+function chunksFromCapture(){
+ // Build <= 12-second chunks; preserve source-video timestamps when available.
+ const result=[];let pieces=[],samples=0,begin=null,last=null;
+ const flush=()=>{if(!samples)return;const raw=new Float32Array(samples);let pos=0;for(const part of pieces){raw.set(part,pos);pos+=part.length}result.push({audio:resample(raw,firstSampleRate),start:begin,end:last});pieces=[];samples=0;begin=null;last=null};
+ for(const frame of captured){
+  if(begin!==null&&(frame.startTime<last-0.5||frame.endTime-last>2))flush();
+  if(begin===null)begin=frame.startTime;
+  pieces.push(frame.pcm);samples+=frame.pcm.length;last=frame.endTime;
+  if(samples>=firstSampleRate*10)flush();
  }
- // Keep clips short for local Whisper memory usage.
- const result=[];for(const t of turns){for(let a=t.start;a<t.end;a+=12)result.push({...t,start:a,end:Math.min(t.end,a+12)})}
- return result.length?result:[{start,end,voice:'Unassigned',confidence:'low'}];
+ flush();return result;
 }
-
 let recognizer=null;
-async function loadModel(){if(recognizer)return recognizer;status('Downloading local speech model (first run may take several minutes)…',12);const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');env.allowLocalModels=false;env.useBrowserCache=true;recognizer=await pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{quantized:true,progress_callback:p=>{if(p.status==='progress'&&p.progress!=null)status('Loading model: '+Math.round(p.progress)+'%',12)}});return recognizer}
-async function decodeSelectedVideo(){status('Reading and decoding audio from video…',4);const ctx=new (window.AudioContext||window.webkitAudioContext)();try{const raw=await file.arrayBuffer();const decoded=await ctx.decodeAudioData(raw);const targetRate=16000;const total=Math.ceil(decoded.duration*targetRate);const offline=new OfflineAudioContext(1,total,targetRate);const src=offline.createBufferSource();src.buffer=decoded;src.connect(offline.destination);src.start();const rendered=await offline.startRendering();return rendered.getChannelData(0).slice()}finally{await ctx.close().catch(()=>{})}}
-$('transcribe').onclick=async()=>{if(!file||busy)return;let start=0,end=duration;if(mode==='section'){start=parseTime($('startTime').value);end=parseTime($('endTime').value);if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end||duration&&end>duration+1){status('Invalid range. Use HH:MM:SS or MM:SS.');return}}stopped=false;setBusy(true);segments=[];speakers={'Unassigned':'Unassigned'};render();try{if(file.size>220*1024*1024)throw Error('This video is over 220 MB. Try a shorter or compressed MP4 to avoid exhausting phone memory.');const audio=await decodeSelectedVideo();if(stopped)return;const asr=await loadModel();if(stopped)return;const rate=16000;const endSec=mode==='section'?end:audio.length/rate;
- const turns=proposeTurns(audio,rate,start,endSec);status('Found '+turns.length+' candidate voice sections. Transcribing…',24);
- let index=0;for(const turn of turns){if(stopped)break;
- const pos=Math.floor(turn.start*rate),limit=Math.min(audio.length,Math.floor(turn.end*rate));if(limit<=pos)continue;
- status('Transcribing '+fmt(turn.start)+' to '+fmt(turn.end)+'…',Math.round(25+70*index/turns.length));
- const output=await asr(audio.slice(pos,limit),{task:'transcribe',language:'english',return_timestamps:false});
- if(stopped)break;const text=(output?.text||'').trim();if(text){const voice=turn.voice;speakers[voice]??=voice;segments.push({speaker:voice,start:Math.round(turn.start*1000),end:Math.round(turn.end*1000),text});render()}
- index++;
- }
- if(stopped)status('Stopped. Partial transcript retained for editing and PDF export.',Math.round(25+70*index/Math.max(1,turns.length)));else status(segments.length?'Complete. Voice changes and labels are experimental. Review and correct each section.':'No speech recognized.',100)}catch(err){status('Local transcription error: '+(err?.message||err)+'. Try a short MP4 with AAC audio in Chrome.',0)}finally{setBusy(false);stopped=false}};
-$('speakerPanel').addEventListener('input',e=>{const k=e.target.dataset.speaker;if(k){speakers[k]=e.target.value;document.querySelectorAll('.seghead strong').forEach((el,i)=>{const s=segments[i];el.textContent='['+fmt(s.start/1000)+'] '+(speakers[s.speaker]||s.speaker)})}});$('transcriptList').addEventListener('input',e=>{const i=e.target.dataset.seg;if(i!==undefined)segments[Number(i)].text=e.target.value;const a=e.target.dataset.assign;if(a!==undefined){segments[Number(a)].speaker=e.target.value||'Speaker unknown';const heading=e.target.closest('.segment')?.querySelector('.seghead strong');if(heading)heading.textContent='['+fmt(segments[Number(a)].start/1000)+'] '+segments[Number(a)].speaker}});$('transcriptList').addEventListener('change',e=>{if(e.target.dataset.assign!==undefined){const i=Number(e.target.dataset.assign);segments[i].speaker=e.target.value;speakers[e.target.value]??=e.target.value;render()}});$('transcriptList').addEventListener('click',e=>{const si=e.target.dataset.split,mi=e.target.dataset.merge;if(si!==undefined){const i=Number(si),v=segments[i];const cut=prompt('Split text after which word? Enter the word number (1 to '+(v.text.trim().split(/\s+/).length-1)+').');const words=v.text.trim().split(/\s+/),n=Number(cut);if(!Number.isInteger(n)||n<1||n>=words.length)return;const mid=Math.round((v.start+v.end)/2);segments.splice(i,1,{...v,end:mid,text:words.slice(0,n).join(' ')},{...v,start:mid,text:words.slice(n).join(' ')});render();return}if(mi!==undefined){const i=Number(mi);if(i>=segments.length-1)return;segments[i].text+=' '+segments[i+1].text;segments[i].end=segments[i+1].end;segments.splice(i+1,1);render();return}const ms=e.target.dataset.seek;if(ms!==undefined&&file){$('player').currentTime=Number(ms)/1000;$('player').scrollIntoView({behavior:'smooth',block:'center'});$('player').play().catch(()=>{})}});$('save').onclick=()=>{try{const r=getRecord(),a=readRecords().filter(x=>x.id!==r.id);a.unshift(r);storeRecords(a.slice(0,40));created=r;renderHistory();status('Record saved on this device. Export a PDF for a separate copy.')}catch(e){status('Save failed. Your browser storage may be full: '+e.message)}};$('export').onclick=()=>{try{FlexPDF.download(getRecord());status('PDF download started.')}catch(e){status('PDF export error: '+e.message)}};$('history').addEventListener('click',e=>{const id=e.target.dataset.load||e.target.dataset.delete;if(!id)return;const a=readRecords();if(e.target.dataset.delete){if(confirm('Delete this saved record?')){storeRecords(a.filter(x=>x.id!==id));renderHistory()}return}const r=a.find(x=>x.id===id);if(!r)return;created=r;segments=r.segments||[];speakers=r.speakers||{};hash=r.hash||'';file=null;duration=0;$('recordTitle').value=r.title||'';$('sourceDate').value=r.sourceDate||'';$('transcribe').disabled=true;render();status('Saved record opened. Original video is not stored; select it again to play sections.');$('transcriptPanel').scrollIntoView({behavior:'smooth'})});$('refresh').onclick=renderHistory;let deferred;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('install').hidden=false});$('install').onclick=async()=>{if(!deferred)return;deferred.prompt();await deferred.userChoice;deferred=null;$('install').hidden=true};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});renderHistory()})();
+async function loadModel(){
+ if(recognizer)return recognizer;
+ status('Downloading Whisper Tiny English model. First use may take several minutes…',8);
+ const {pipeline,env}=await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+ env.allowLocalModels=false;env.useBrowserCache=true;
+ recognizer=await pipeline('automatic-speech-recognition','Xenova/whisper-tiny.en',{
+  quantized:true,progress_callback:p=>{if(p.status==='progress'&&p.progress!=null)status('Downloading speech model: '+Math.round(p.progress)+'%',8)}
+ });return recognizer;
+}
+async function finishTranscription(){
+ if(finishing)return;armed=false;finishing=true;playbackButtons();
+ const blocks=chunksFromCapture();captured=[];frameCount=0;chunkStart=null;lastVideoTime=null;
+ if(!blocks.length){finishing=false;status('No video audio was captured. Play the video after START TRANSCRIBING. Check that it has an audio track.',0);playbackButtons();return}
+ try{
+  status('Captured '+blocks.length+' audio sections. Loading local transcription model…',10);
+  const asr=await loadModel();let count=0;
+  for(const block of blocks){
+   status('Transcribing audio section '+(count+1)+' of '+blocks.length+'…',Math.round(15+80*count/blocks.length));
+   const peak=block.audio.reduce((m,v)=>Math.max(m,Math.abs(v)),0);
+   if(peak>.001){
+    const output=await asr(block.audio,{task:'transcribe',language:'english',return_timestamps:false});
+    const text=(output?.text||'').trim();
+    if(text){segments.push({speaker:'Unassigned',start:Math.round(block.start*1000),end:Math.round(block.end*1000),text});render()}
+   }
+   count++;
+  }
+  status(segments.length?'Transcription complete. Review text and assign speakers.':'No speech recognized in captured audio. Check that the video is audible and try again.',100);
+ }catch(err){status('Transcription error: '+(err?.message||err)+'. Captured audio could not be transcribed.',0)}
+ finally{finishing=false;playbackButtons()}
+}
+$('transcribe').onclick=async()=>{
+ if(!file||armed||finishing)return;
+ try{
+  await setupCapture();await audioCtx.resume();
+  captured=[];frameCount=0;chunkStart=null;lastVideoTime=null;segments=[];speakers={'Unassigned':'Unassigned'};render();
+  armed=true;playbackButtons();
+  status($('player').paused?'Transcription armed. Press PLAY VIDEO to capture speech.':'Capturing video audio now. Press STOP TRANSCRIBING to finish.',0);
+ }catch(err){status('Audio capture setup failed: '+(err?.message||err)+'. Try Chrome on Android.',0);armed=false;playbackButtons()}
+};
+$('stop').onclick=()=>{if(armed)finishTranscription()};
+$('playVideo').onclick=async()=>{try{await $('player').play()}catch(err){status('Video playback failed: '+err.message)}playbackButtons()};
+$('pauseVideo').onclick=()=>{$('player').pause();playbackButtons();if(armed)status('Video paused. Audio capture paused. Resume playback or stop transcribing.')};
+$('stopVideo').onclick=()=>{$('player').pause();$('player').currentTime=0;playbackButtons();if(armed)status('Video stopped. Transcription is still armed. Press STOP TRANSCRIBING to process captured audio.')};
+$('player').addEventListener('play',()=>{playbackButtons();if(armed)status('Capturing audio as the video plays…')});
+$('player').addEventListener('pause',()=>{playbackButtons();if(armed&&!$('player').ended)status('Video paused. Transcription remains armed.')});
+$('player').addEventListener('ended',()=>{playbackButtons();if(armed)finishTranscription()});
+$('speakerPanel').addEventListener('input',e=>{const k=e.target.dataset.speaker;if(k){speakers[k]=e.target.value;document.querySelectorAll('.seghead strong').forEach((el,i)=>{const s=segments[i];el.textContent='['+fmt(s.start/1000)+'] '+(speakers[s.speaker]||s.speaker)})}});$('transcriptList').addEventListener('input',e=>{const i=e.target.dataset.seg;if(i!==undefined)segments[Number(i)].text=e.target.value;const a=e.target.dataset.assign;if(a!==undefined){segments[Number(a)].speaker=e.target.value||'Speaker unknown';const heading=e.target.closest('.segment')?.querySelector('.seghead strong');if(heading)heading.textContent='['+fmt(segments[Number(a)].start/1000)+'] '+segments[Number(a)].speaker}});$('transcriptList').addEventListener('change',e=>{if(e.target.dataset.assign!==undefined){const i=Number(e.target.dataset.assign);segments[i].speaker=e.target.value;speakers[e.target.value]??=e.target.value;render()}});$('transcriptList').addEventListener('click',e=>{const si=e.target.dataset.split,mi=e.target.dataset.merge;if(si!==undefined){const i=Number(si),v=segments[i];const cut=prompt('Split text after which word? Enter the word number (1 to '+(v.text.trim().split(/\s+/).length-1)+').');const words=v.text.trim().split(/\s+/),n=Number(cut);if(!Number.isInteger(n)||n<1||n>=words.length)return;const mid=Math.round((v.start+v.end)/2);segments.splice(i,1,{...v,end:mid,text:words.slice(0,n).join(' ')},{...v,start:mid,text:words.slice(n).join(' ')});render();return}if(mi!==undefined){const i=Number(mi);if(i>=segments.length-1)return;segments[i].text+=' '+segments[i+1].text;segments[i].end=segments[i+1].end;segments.splice(i+1,1);render();return}const ms=e.target.dataset.seek;if(ms!==undefined&&file){$('player').currentTime=Number(ms)/1000;$('player').scrollIntoView({behavior:'smooth',block:'center'});$('player').play().catch(()=>{})}});$('save').onclick=()=>{try{const r=getRecord(),a=readRecords().filter(x=>x.id!==r.id);a.unshift(r);storeRecords(a.slice(0,40));created=r;renderHistory();status('Record saved on this device. Export a PDF for a separate copy.')}catch(e){status('Save failed. Your browser storage may be full: '+e.message)}};$('export').onclick=()=>{try{FlexPDF.download(getRecord());status('PDF download started.')}catch(e){status('PDF export error: '+e.message)}};$('history').addEventListener('click',e=>{const id=e.target.dataset.load||e.target.dataset.delete;if(!id)return;const a=readRecords();if(e.target.dataset.delete){if(confirm('Delete this saved record?')){storeRecords(a.filter(x=>x.id!==id));renderHistory()}return}const r=a.find(x=>x.id===id);if(!r)return;created=r;segments=r.segments||[];speakers=r.speakers||{};hash=r.hash||'';file=null;duration=0;$('recordTitle').value=r.title||'';$('sourceDate').value=r.sourceDate||'';playbackButtons();render();status('Saved record opened. Original video is not stored; select it again to play sections.');$('transcriptPanel').scrollIntoView({behavior:'smooth'})});$('refresh').onclick=renderHistory;let deferred;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferred=e;$('install').hidden=false});$('install').onclick=async()=>{if(!deferred)return;deferred.prompt();await deferred.userChoice;deferred=null;$('install').hidden=true};if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});renderHistory()})();
