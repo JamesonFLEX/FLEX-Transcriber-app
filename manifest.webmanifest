@@ -1,1 +1,25 @@
-{"name":"FLEX Video Transcriber","short_name":"FLEX Transcript","id":"./","start_url":"./","scope":"./","display":"standalone","background_color":"#07111f","theme_color":"#07111f","description":"Speaker-labeled video transcription and PDF export","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
+{
+  "name": "FT | FlexTranscription",
+  "short_name": "FT Transcribe",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "description": "Video transcription with speaker diarization, timestamps, and PDF export",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

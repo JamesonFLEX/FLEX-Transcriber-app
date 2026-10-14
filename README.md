@@ -1,11 +1,11 @@
-# FLEX Video Transcriber | Build 1
+# FLEX Video Transcriber | Build B3
 
 Installable GitHub Pages PWA for Gallery / Google Drive video transcription, speaker diarization, transcript editing, local history, and PDF download.
 
 ## Deploy the interface
 
 1. Create a **public GitHub repository** named `flex-video-transcriber`.
-2. Upload `index.html`, `style.css`, `app.js`, `pdf.js`, `sw.js`, `icon.svg`, and `manifest.webmanifest` to the **root** of the repository. Upload `backend/` and `README.md` too if you want the source code there.
+2. Upload `index.html`, `style.css`, `app.js`, `pdf.js`, `sw.js`, `icon-192.png, icon-512.png, ft-logo.png, social-preview.jpg`, and `manifest.webmanifest` to the **root** of the repository. Upload `backend/` and `README.md` too if you want the source code there.
 3. GitHub repository **Settings → Pages → Deploy from a branch → main → /(root) → Save**.
 4. Visit `https://YOUR-USERNAME.github.io/flex-video-transcriber/` in Chrome on Android. From Chrome menu, choose **Install app** or **Add to Home screen** (the install prompt depends on browser eligibility).
 
@@ -45,3 +45,15 @@ The PWA cannot transcribe video by itself. It uses AssemblyAI through a private 
 ## Versioning
 
 Update `CACHE` in `sw.js` when publishing a new build to ensure new files are fetched.
+
+
+BUILD 2: Dedicated OPEN WITH GOOGLE DRIVE button launches the Android document picker with unrestricted file filtering. Android controls which providers appear. If Google Drive is absent from the picker, download the video using the Drive app and choose it from Downloads.
+
+
+## Build B3 branding
+- New metallic FT logo is used in the header and landing section.
+- PNG icons at 192 and 512 pixels are used by the Android install manifest.
+- `social-preview.jpg` (1200x630) is used in Open Graph and Twitter preview metadata.
+- The HTML now loads `pdf.js` before `app.js`, correcting a missing script reference that prevented PDF exports.
+- All files are flat in the ZIP. Deploy Worker separately.
+- Social link previews require a public absolute og:image URL for best reliability. After you know your GitHub Pages URL, replace `content="social-preview.jpg"` in `index.html` with your full HTTPS URL to the preview image, then redeploy. Some messaging services do not generate previews for GitHub Pages.
