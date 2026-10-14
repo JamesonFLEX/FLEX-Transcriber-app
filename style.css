@@ -8,3 +8,5 @@
 .segment-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0}.segment-tools label{display:flex;align-items:center;gap:5px;font-size:12px}.segment-tools select{max-width:170px;padding:8px;border-radius:8px;background:#122a40;color:white;border:1px solid #3a6582}.segment-tools button{padding:8px 10px}
 
 .video-loading{display:flex;align-items:center;gap:12px;margin:14px 0;padding:15px;border:1px solid #3188a5;border-radius:12px;background:#12334a;color:#d7f8ff;font-size:13px;line-height:1.5}.video-loading[hidden]{display:none}.loadspinner{width:24px;height:24px;flex:0 0 24px;border:3px solid #36556c;border-top-color:#29dce7;border-radius:50%}.video-loading.is-loading .loadspinner{animation:ftspin .8s linear infinite}@keyframes ftspin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.video-loading.is-loading .loadspinner{animation:none;border-top-color:#fff}}
+
+.video-diagnostics{white-space:pre-wrap;overflow-wrap:anywhere;background:#071725;color:#9bd5e7;border:1px solid #29516b;border-radius:10px;padding:12px;font:12px/1.6 monospace;margin:12px 0}.video-diagnostics[hidden]{display:none}video[hidden]{display:none!important}

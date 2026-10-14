@@ -4,26 +4,31 @@ function playerReady(){const v=$('player');return v.readyState>=1&&Number.isFini
 async function onVideoChosen(e){
  const selected=e.target.files?.[0];if(!selected)return;
  if(armed||finishing){status('Stop transcription before changing the video.');return}
- if(selected.type&&!selected.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|3gp|mkv|avi)$/i.test(selected.name)){status('Please choose a video file.');return}
  const token=++loadToken;clearTimeout(loadTimer);
- const oldUrl=objectUrl;const newUrl=URL.createObjectURL(selected);
- const v=$('player');v.pause();
+ const oldUrl=objectUrl;const v=$('player');v.pause();
  file=selected;created=null;segments=[];speakers={};hash='';duration=0;render();
- objectUrl=newUrl;v.hidden=false;$('fileInfo').hidden=false;
- $('fileInfo').textContent=selected.name+' · '+size(selected.size);
+ $('fileInfo').hidden=false;$('fileInfo').textContent=selected.name+' · '+size(selected.size)+' · '+(selected.type||'unknown media type');
  $('recordTitle').value=selected.name.replace(/\.[^.]+$/,'');
- loadingUI('Opening video from '+(e.target.id==='driveFile'?'Google Drive / Files':'Gallery / Files')+'…');
- status('Video selected. Waiting for your browser to load video information…',0);
+ const log=$('videoDiagnostics');log.hidden=false;log.textContent='Selected file. Size: '+size(selected.size)+'. MIME: '+(selected.type||'not provided')+'.';
+ const note=t=>{log.textContent+='\n'+t;};
+ loadingUI('Loading selected video…');status('Reading video file…',4);
  playbackButtons();$('playVideo').disabled=true;$('transcribe').disabled=true;
- let settled=false;
- const clean=()=>{v.removeEventListener('loadedmetadata',ok);v.removeEventListener('canplay',ok);v.removeEventListener('error',bad);v.removeEventListener('stalled',stalled);clearTimeout(loadTimer)};
- const ok=()=>{if(token!==loadToken||settled||!playerReady())return;settled=true;clean();duration=v.duration;$('endTime').value=fmt(duration);loadingUI('',false);status('Video ready ('+fmt(duration)+'). Press START TRANSCRIBING, then PLAY VIDEO.',100);playbackButtons();if(oldUrl)URL.revokeObjectURL(oldUrl)};
- const bad=()=>{if(token!==loadToken||settled)return;settled=true;clean();loadingUI('Video could not be opened. Try downloading it from Drive to Downloads, then select it from Gallery / Files.');$('videoLoading').classList.remove('is-loading');status('Video load failed. This file format or its codec may not be supported by Chrome.',0);$('playVideo').disabled=true;$('transcribe').disabled=true;if(oldUrl)URL.revokeObjectURL(oldUrl)};
- const stalled=()=>{if(token===loadToken&&!settled){loadingUI('Still loading video… Large Drive files can take longer.');status('Waiting for video data. If this continues, download the file to your phone first.')}};
- v.addEventListener('loadedmetadata',ok);v.addEventListener('canplay',ok);v.addEventListener('error',bad);v.addEventListener('stalled',stalled);
- v.removeAttribute('src');v.load();v.src=newUrl;v.load();
- loadTimer=setTimeout(()=>{if(token!==loadToken||settled)return;if(playerReady()){ok();return}settled=true;clean();loadingUI('Video is taking too long to open. Download it from Drive to your phone, then try Gallery / Files.');$('videoLoading').classList.remove('is-loading');status('Video loading timed out after 30 seconds. Please try a locally downloaded MP4.',0);$('playVideo').disabled=true;$('transcribe').disabled=true;if(oldUrl)URL.revokeObjectURL(oldUrl)},30000);
- // Allow selecting the same file again after an unsuccessful attempt.
+ if(!selected.size){loadingUI('The selected file is empty or Drive has not downloaded it.');$('videoLoading').classList.remove('is-loading');status('File is empty. Download it to your phone and select the local copy.',0);return}
+ if(selected.type&&!selected.type.startsWith('video/')&&!/\.(mp4|mov|m4v|webm|3gp|mkv|avi)$/i.test(selected.name)){loadingUI('This is not a recognized video file.');$('videoLoading').classList.remove('is-loading');status('Choose a video file.',0);return}
+ let settled=false;let newUrl;
+ const cleanup=()=>{v.removeEventListener('loadedmetadata',ready);v.removeEventListener('canplay',ready);v.removeEventListener('error',bad);v.removeEventListener('progress',progress);v.removeEventListener('waiting',waiting);clearTimeout(loadTimer)};
+ const ready=()=>{if(token!==loadToken||settled||!playerReady())return;settled=true;cleanup();duration=v.duration;$('endTime').value=fmt(duration);loadingUI('',false);status('Video ready ('+fmt(duration)+'). Press START TRANSCRIBING, then PLAY VIDEO.',100);note('Ready. Duration: '+fmt(duration)+'. Video: '+v.videoWidth+'×'+v.videoHeight+'.');playbackButtons();if(oldUrl&&oldUrl!==newUrl)URL.revokeObjectURL(oldUrl)};
+ const bad=()=>{if(token!==loadToken||settled)return;settled=true;cleanup();const code=v.error?.code||0;const reasons={1:'loading aborted',2:'network or Drive stream error',3:'video decoding error',4:'format or codec not supported'};note('MEDIA ERROR '+code+': '+(reasons[code]||'unknown')+'. '+(v.error?.message||''));loadingUI('Could not open this video. Try a downloaded MP4 (H.264 video, AAC audio).');$('videoLoading').classList.remove('is-loading');status('Video load failed: '+(reasons[code]||'unknown error')+'. See diagnostics below.',0);$('playVideo').disabled=true;$('transcribe').disabled=true;if(oldUrl&&oldUrl!==newUrl)URL.revokeObjectURL(oldUrl)};
+ const progress=()=>{if(token!==loadToken||settled)return;if(playerReady())ready();else status('Video data received. Reading metadata…',35)};
+ const waiting=()=>{if(token!==loadToken||settled)return;loadingUI('Waiting for video data from Android / Drive…');note('Waiting for more video data.')};
+ v.addEventListener('loadedmetadata',ready);v.addEventListener('canplay',ready);v.addEventListener('error',bad);v.addEventListener('progress',progress);v.addEventListener('waiting',waiting);
+ try{
+  newUrl=URL.createObjectURL(selected);objectUrl=newUrl;
+  v.hidden=false;v.style.display='block';v.preload='auto';v.src=newUrl;v.load();
+  note('Object URL assigned. Loading metadata…');
+  if(playerReady())ready();
+ }catch(err){note('File opening exception: '+err.message);bad();return}
+ loadTimer=setTimeout(()=>{if(token!==loadToken||settled)return;if(playerReady()){ready();return}note('Still loading after 45 seconds. readyState='+v.readyState+', networkState='+v.networkState+'.');loadingUI('Still loading. If this is a Drive file, download it to your phone first.');$('videoLoading').classList.remove('is-loading');status('Video has not become ready. Try a local Downloads copy. See diagnostics.',0)},45000);
  e.target.value='';
 }
 $('videoFile').addEventListener('change',onVideoChosen);$('driveFile').addEventListener('change',onVideoChosen);$('chooseGallery').onclick=()=>{$('videoFile').value='';$('videoFile').click()};$('chooseDrive').onclick=()=>{$('driveHelp').hidden=false;$('driveFile').value='';$('driveFile').click()};$('player').addEventListener('loadedmetadata',()=>{duration=Number.isFinite($('player').duration)?$('player').duration:0;$('endTime').value=fmt(duration)});function setMode(m){mode=m;$('rangeArea').hidden=m==='full';$('fullMode').classList.toggle('selected',m==='full');$('sectionMode').classList.toggle('selected',m==='section')}$('fullMode').onclick=()=>setMode('full');$('sectionMode').onclick=()=>setMode('section');$('setStart').onclick=()=>{$('startTime').value=fmt($('player').currentTime)};$('setEnd').onclick=()=>{$('endTime').value=fmt($('player').currentTime)};// B6: capture the actual video element's audio during user-controlled playback.
