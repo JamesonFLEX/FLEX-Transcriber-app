@@ -1,0 +1,6 @@
+name = "flex-video-transcriber-api"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://YOUR-USERNAME.github.io"
